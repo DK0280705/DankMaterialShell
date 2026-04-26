@@ -541,8 +541,21 @@ Singleton {
             const validated = {};
             for (const entry of (data.configurations || [])) {
                 const virtualId = Object.keys(entry.outputs || {}).sort().join("+");
-                if (virtualId)
-                    validated[virtualId] = {name: entry.name || "auto", outputs: entry.outputs};
+                if (!virtualId)
+                    continue;
+                // If every output is disabled, enable the first one so the profile is always usable 
+                const hasEnabledOutput = Object.values(entry.outputs || {}).some(cfg => !cfg.disabled);
+                let outputs = entry.outputs;
+                if (!hasEnabledOutput) {
+                    const firstKey = Object.keys(outputs)[0];
+                    outputs = JSON.parse(JSON.stringify(outputs));
+                    delete outputs[firstKey].disabled;
+                    if (outputs[firstKey].niri)
+                        delete outputs[firstKey].niri.disabled;
+                    if (outputs[firstKey].hyprland)
+                        delete outputs[firstKey].hyprland.disabled;
+                }
+                validated[virtualId] = {name: entry?.name ? entry.name : "", outputs: outputs};
             }
             validatedProfiles = validated;
             matchedProfile = findMatchingProfile();
@@ -707,7 +720,7 @@ Singleton {
             if (Object.keys(outputConfigs).length === 0)
                 return;
 
-            const syntheticEntry = {name: "auto", outputs: outputConfigs};
+            const syntheticEntry = {name: "", outputs: outputConfigs};
             const syntheticId = Object.keys(outputConfigs).sort().join("+");
             applyConfigEntry(syntheticEntry, syntheticId, "", false);
             saveAutoConfig();
@@ -738,7 +751,7 @@ Singleton {
             const match = findConfigEntry(data, outputSet);
             // Preserve existing name if this entry already has one
             const existingName = match?.entry?.name;
-            const newEntry = {"name": existingName ?? "auto", "outputs": outputConfigs}; 
+            const newEntry = {"name": existingName ?? "", "outputs": outputConfigs}; 
             if (match)
                 data.configurations[match.index] = newEntry;
             else
@@ -1604,6 +1617,26 @@ Singleton {
     function getEffectiveValue(outputName, key, originalValue) {
         const pending = getPendingValue(outputName, key);
         return pending !== undefined ? pending : originalValue;
+    }
+
+    // Returns true if the given output can currently be disabled.
+    // Prevents disabling all outputs and prevents disabling the only output
+    // in a single-display configuration.
+    function canDisableOutput(output, outputName) {
+        const totalOutputs = Object.keys(outputs).length;
+        if (totalOutputs <= 1)
+            return false;
+        let enabledCount = 0;
+        for (const name in outputs) {
+            let disabled = false;
+            if (CompositorService.isNiri)
+                disabled = getNiriSetting(outputs[name], name, "disabled", false);
+            else if (CompositorService.isHyprland)
+                disabled = getHyprlandSetting(outputs[name], name, "disabled", false);
+            if (!disabled)
+                enabledCount++;
+        }
+        return enabledCount >= 2;
     }
 
     function clearPendingChanges() {

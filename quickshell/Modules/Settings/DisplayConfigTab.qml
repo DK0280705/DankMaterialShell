@@ -21,7 +21,7 @@ Item {
     property var editMonitorSelection: ({})
 
     function getProfileOptions() {
-        return Object.values(DisplayConfigState.validatedProfiles).filter(p => p.name !== "auto").map(p => p.name);
+        return Object.values(DisplayConfigState.validatedProfiles).filter(p => p.name !== "").map(p => p.name);
     }
 
     function getProfileIds() {
@@ -183,7 +183,6 @@ Item {
                             compactMode: true
                             dropdownWidth: width
                             options: root.getProfileOptions()
-                            currentValue: root.getProfileNameById(root.selectedProfileId)
                             emptyText: I18n.tr("No profiles")
                             enabled: !SettingsData.displayProfileAutoSelect
                             onValueChanged: value => {
@@ -191,6 +190,12 @@ Item {
                                 if (profileId && profileId !== root.selectedProfileId)
                                     DisplayConfigState.activateProfile(profileId);
                             }
+                        }
+
+                        Binding {
+                            target: profileDropdown
+                            property: "currentValue"
+                            value: SettingsData.displayProfileAutoSelect ? I18n.tr("Auto") : root.getProfileNameById(root.selectedProfileId)
                         }
 
                         DankButton {
